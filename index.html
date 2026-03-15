@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🍎 Nutrition Game Planner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/canvas-confetti@1.6.0/dist/confetti.browser.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { font-family: 'Nunito', sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background: #FFF8F0; overscroll-behavior: none; }
+.btn-big { min-height: 56px; min-width: 56px; touch-action: manipulation; }
+.food-card { transition: all 0.2s ease; }
+.food-card.selected { transform: scale(1.05); box-shadow: 0 0 0 4px #22c55e; }
+.food-card:active { transform: scale(0.95); }
+.screen { display: none; }
+.screen.active { display: flex; flex-direction: column; }
+.shake { animation: shake 0.5s ease; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+.fade-in { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.badge { animation: badgePop 0.5s ease; }
+@keyframes badgePop { 0%{transform:scale(0)} 50%{transform:scale(1.3)} 100%{transform:scale(1)} }
+.progress-fill { transition: width 0.8s ease; }
+.loading-dots::after { content: ''; animation: dots 1.5s infinite; }
+@keyframes dots { 0%{content:'🍳'} 33%{content:'🍳🥘'} 66%{content:'🍳🥘🍽️'} }
+.chat-bubble { max-width: 85%; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #FDA44F; border-radius: 4px; }
+.nav-btn { transition: all 0.2s; }
+.nav-btn.active { background: #FF8C00; color: white; transform: translateY(-2px); }
+.shopping-item { transition: all 0.3s ease; }
+.shopping-item.checked { opacity: 0.5; text-decoration: line-through; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Global Loading Overlay -->
+<div id="globalLoader" class="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center hidden">
+  <div class="text-6xl loading-dots mb-4"></div>
+  <p id="loaderText" class="text-xl font-bold text-orange-600">Making your meal plan...</p>
+</div>
+
+<!-- SCREEN: Welcome -->
+<div id="screen-welcome" class="screen active min-h-screen items-center justify-center p-6 text-center">
+  <div class="fade-in max-w-md mx-auto">
+    <div class="text-8xl mb-4 pulse">🍎</div>
+    <h1 class="text-3xl font-extrabold text-orange-700 mb-2">Nutrition Game</h1>
+    <p class="text-lg text-orange-500 font-semibold mb-6">Easy healthy meals for your family! 🎮</p>
+    <div class="bg-white rounded-3xl shadow-lg p-6 mb-6">
+      <p class="text-gray-700 text-lg mb-4">👋 Hi there! Let's make yummy, healthy meals together!</p>
+      <div class="flex justify-center gap-4 text-4xl mb-4">
+        <span>🥕</span><span>🍗</span><span>🍚</span><span>🥦</span><span>🍌</span>
+      </div>
+      <p class="text-gray-500">Tap pictures to choose. No reading needed! 🎯</p>
+    </div>
+    <button onclick="speak('Let us make healthy meals together!'); goTo('screen-role')" class="btn-big w-full bg-green-500 hover:bg-green-600 text-white text-xl font-bold rounded-2xl py-4 px-8 shadow-lg flex items-center justify-center gap-3">
+      <span class="text-3xl">▶️</span> Start! Let's Go!
+    </button>
+    <button onclick="loadSavedData()" id="continueBtn" class="btn-big w-full mt-3 bg-orange-100 text-orange-700 text-lg font-bold rounded-2xl py-3 px-8 hidden">
+      📋 Continue Where I Left Off
+    </button>
+  </div>
+</div>
+
+<!-- SCREEN: Role Selection -->
+<div id="screen-role" class="screen min-h-screen p-4">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="text-center mb-6">
+      <p class="text-2xl font-bold text-orange-700">Who are you? 👤</p>
+      <p class="text-gray-500 mt-1">Tap one!</p>
+    </div>
+    <div class="space-y-4">
+      <button onclick="setRole('family')" class="btn-big w-full bg-white rounded-2xl shadow-md p-6 flex items-center gap-4 hover:shadow-lg">
+        <span class="text-5xl">👨‍👩‍👧‍👦</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">Family / Parent</p>
+          <p class="text-gray-500">Plan meals for my kids</p>
+        </div>
+      </button>
+      <button onclick="setRole('teacher')" class="btn-big w-full bg-white rounded-2xl shadow-md p-6 flex items-center gap-4 hover:shadow-lg">
+        <span class="text-5xl">👩‍🏫</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">Teacher / Staff</p>
+          <p class="text-gray-500">School nutrition activities</p>
+        </div>
+      </button>
+      <button onclick="setRole('healthworker')" class="btn-big w-full bg-white rounded-2xl shadow-md p-6 flex items-center gap-4 hover:shadow-lg">
+        <span class="text-5xl">🏥</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">Health Worker</p>
+          <p class="text-gray-500">Help families eat better</p>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Food Preferences -->
+<div id="screen-foods" class="screen min-h-screen p-4 pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="text-center mb-4">
+      <p class="text-2xl font-bold text-orange-700">What foods do you like? 😋</p>
+      <p class="text-gray-500">Tap all that you enjoy!</p>
+    </div>
+    <div id="foodGrid" class="grid grid-cols-3 gap-3"></div>
+    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur p-4 shadow-t">
+      <div class="max-w-md mx-auto flex gap-3">
+        <button onclick="goTo('screen-role')" class="btn-big bg-gray-200 rounded-2xl py-3 px-5 font-bold text-gray-600">⬅️</button>
+        <button onclick="saveFoodPrefs(); goTo('screen-allergies')" class="btn-big flex-1 bg-green-500 text-white text-xl font-bold rounded-2xl py-3">Next ➡️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Allergies -->
+<div id="screen-allergies" class="screen min-h-screen p-4 pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="text-center mb-4">
+      <p class="text-2xl font-bold text-red-600">Any food allergies? ⚠️</p>
+      <p class="text-gray-500">Tap if you must AVOID these</p>
+    </div>
+    <div id="allergyGrid" class="grid grid-cols-3 gap-3"></div>
+    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur p-4">
+      <div class="max-w-md mx-auto flex gap-3">
+        <button onclick="goTo('screen-foods')" class="btn-big bg-gray-200 rounded-2xl py-3 px-5 font-bold text-gray-600">⬅️</button>
+        <button onclick="saveAllergies(); goTo('screen-budget')" class="btn-big flex-1 bg-green-500 text-white text-xl font-bold rounded-2xl py-3">Next ➡️</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Budget -->
+<div id="screen-budget" class="screen min-h-screen p-4">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="text-center mb-6">
+      <p class="text-2xl font-bold text-orange-700">Weekly food budget? 💰</p>
+      <p class="text-gray-500">How much can you spend on food each week?</p>
+    </div>
+    <div class="space-y-4">
+      <button onclick="setBudget('low')" class="btn-big w-full bg-white rounded-2xl shadow-md p-5 flex items-center gap-4 hover:shadow-lg food-card" data-budget="low">
+        <span class="text-4xl">💵</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">Under $50/week</p>
+          <p class="text-gray-500">Very tight budget</p>
+        </div>
+      </button>
+      <button onclick="setBudget('medium')" class="btn-big w-full bg-white rounded-2xl shadow-md p-5 flex items-center gap-4 hover:shadow-lg food-card" data-budget="medium">
+        <span class="text-4xl">💵💵</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">$50 - $100/week</p>
+          <p class="text-gray-500">Moderate budget</p>
+        </div>
+      </button>
+      <button onclick="setBudget('higher')" class="btn-big w-full bg-white rounded-2xl shadow-md p-5 flex items-center gap-4 hover:shadow-lg food-card" data-budget="higher">
+        <span class="text-4xl">💵💵💵</span>
+        <div class="text-left">
+          <p class="text-xl font-bold text-gray-800">Over $100/week</p>
+          <p class="text-gray-500">More flexible</p>
+        </div>
+      </button>
+    </div>
+    <div class="mt-6 flex gap-3">
+      <button onclick="goTo('screen-allergies')" class="btn-big bg-gray-200 rounded-2xl py-3 px-5 font-bold text-gray-600">⬅️</button>
+      <button onclick="goTo('screen-culture')" class="btn-big flex-1 bg-green-500 text-white text-xl font-bold rounded-2xl py-3">Next ➡️</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Culture -->
+<div id="screen-culture" class="screen min-h-screen p-4 pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="text-center mb-4">
+      <p class="text-2xl font-bold text-orange-700">Food traditions? 🌍</p>
+      <p class="text-gray-500">What type of food does your family usually cook?</p>
+    </div>
+    <div id="cultureGrid" class="grid grid-cols-2 gap-3"></div>
+    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur p-4">
+      <div class="max-w-md mx-auto flex gap-3">
+        <button onclick="goTo('screen-budget')" class="btn-big bg-gray-200 rounded-2xl py-3 px-5 font-bold text-gray-600">⬅️</button>
+        <button onclick="saveCulture(); generateMealPlan()" class="btn-big flex-1 bg-orange-500 text-white text-xl font-bold rounded-2xl py-3 pulse">🍳 Make My Plan!</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Main Dashboard -->
+<div id="screen-dashboard" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-orange-500 to-yellow-400 p-4 rounded-b-3xl shadow-lg">
+      <div class="flex items-center justify-between text-white">
+        <div>
+          <p class="text-lg font-bold">🍎 Nutrition Game</p>
+          <p class="text-sm opacity-90" id="dashGreeting">Hi there!</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="bg-white/30 rounded-full px-3 py-1 text-sm font-bold" id="pointsBadge">⭐ 0</span>
+          <button onclick="goTo('screen-settings')" class="text-2xl">⚙️</button>
+        </div>
+      </div>
+      <!-- Progress bar -->
+      <div class="mt-3 bg-white/30 rounded-full h-3">
+        <div class="progress-fill bg-white rounded-full h-3" id="weeklyProgress" style="width:0%"></div>
+      </div>
+      <p class="text-white/80 text-xs mt-1" id="progressLabel">Weekly challenge: 0/7 healthy meals</p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="p-4 space-y-4">
+      <!-- Today's Meals -->
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold text-gray-800">📅 Today's Meals</h2>
+          <button onclick="speakMeals()" class="bg-blue-100 text-blue-600 rounded-full px-3 py-1 text-sm font-bold btn-big">🔊 Listen</button>
+        </div>
+        <div id="todayMeals" class="space-y-3"></div>
+      </div>
+
+      <!-- Quick Actions Grid -->
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="goTo('screen-shopping')" class="btn-big bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center hover:bg-green-100">
+          <span class="text-3xl block mb-1">🛒</span>
+          <span class="font-bold text-green-700">Shopping List</span>
+        </button>
+        <button onclick="goTo('screen-recipes')" class="btn-big bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 text-center hover:bg-purple-100">
+          <span class="text-3xl block mb-1">📖</span>
+          <span class="font-bold text-purple-700">Recipes</span>
+        </button>
+        <button onclick="goTo('screen-challenges')" class="btn-big bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center hover:bg-yellow-100">
+          <span class="text-3xl block mb-1">🏆</span>
+          <span class="font-bold text-yellow-700">Challenges</span>
+        </button>
+        <button onclick="goTo('screen-chat')" class="btn-big bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 text-center hover:bg-blue-100">
+          <span class="text-3xl block mb-1">💬</span>
+          <span class="font-bold text-blue-700">Ask Coach</span>
+        </button>
+      </div>
+
+      <!-- Earned Badges -->
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h2 class="text-lg font-bold text-gray-800 mb-3">🏅 My Badges</h2>
+        <div id="badgesContainer" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Shopping List -->
+<div id="screen-shopping" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="bg-green-500 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-dashboard')" class="text-2xl">⬅️</button>
+        <h1 class="text-xl font-bold flex-1">🛒 Shopping List</h1>
+        <button onclick="speakShopping()" class="bg-white/30 rounded-full px-3 py-1 text-sm font-bold">🔊</button>
+      </div>
+      <p class="text-green-100 text-sm mt-1" id="shoppingTotal">Estimated: $0</p>
+    </div>
+    <div id="shoppingList" class="p-4 space-y-2"></div>
+  </div>
+</div>
+
+<!-- SCREEN: Recipes -->
+<div id="screen-recipes" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="bg-purple-500 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-dashboard')" class="text-2xl">⬅️</button>
+        <h1 class="text-xl font-bold flex-1">📖 Recipes</h1>
+      </div>
+    </div>
+    <div id="recipeList" class="p-4 space-y-4"></div>
+  </div>
+</div>
+
+<!-- SCREEN: Recipe Detail -->
+<div id="screen-recipe-detail" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="bg-purple-500 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-recipes')" class="text-2xl">⬅️</button>
+        <h1 class="text-xl font-bold flex-1" id="recipeTitle">Recipe</h1>
+        <button onclick="speakRecipe()" class="bg-white/30 rounded-full px-3 py-1 text-sm font-bold">🔊</button>
+      </div>
+    </div>
+    <div id="recipeDetail" class="p-4"></div>
+  </div>
+</div>
+
+<!-- SCREEN: Challenges -->
+<div id="screen-challenges" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="bg-yellow-500 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-dashboard')" class="text-2xl">⬅️</button>
+        <h1 class="text-xl font-bold flex-1">🏆 Challenges</h1>
+      </div>
+    </div>
+    <div id="challengeList" class="p-4 space-y-3"></div>
+  </div>
+</div>
+
+<!-- SCREEN: Chat / AI Coach -->
+<div id="screen-chat" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full flex flex-col h-screen">
+    <div class="bg-blue-500 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-dashboard')" class="text-2xl">⬅️</button>
+        <span class="text-3xl">🤖</span>
+        <div>
+          <h1 class="text-xl font-bold">Nutrition Coach</h1>
+          <p class="text-blue-100 text-sm">Ask me anything about food!</p>
+        </div>
+      </div>
+    </div>
+    <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    <div class="bg-white border-t p-3">
+      <div class="flex gap-2 max-w-md mx-auto">
+        <div class="flex gap-1 overflow-x-auto pb-1" id="quickQuestions"></div>
+      </div>
+      <div class="flex gap-2 max-w-md mx-auto mt-2">
+        <input id="chatInput" type="text" placeholder="Type or tap a question..." class="flex-1 border-2 border-gray-200 rounded-2xl px-4 py-3 text-lg focus:border-blue-400 outline-none" onkeypress="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" class="btn-big bg-blue-500 text-white rounded-2xl px-5 text-xl font-bold">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: Settings -->
+<div id="screen-settings" class="screen min-h-screen pb-24">
+  <div class="fade-in max-w-md mx-auto w-full">
+    <div class="bg-gray-600 p-4 rounded-b-3xl shadow-lg text-white">
+      <div class="flex items-center gap-3">
+        <button onclick="goTo('screen-dashboard')" class="text-2xl">⬅️</button>
+        <h1 class="text-xl font-bold flex-1">⚙️ Settings</h1>
+      </div>
+    </div>
+    <div class="p-4 space-y-4">
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h3 class="font-bold text-gray-800 mb-3">🔊 Voice & Sound</h3>
+        <label class="flex items-center justify-between py-2">
+          <span class="text-gray-700">Audio prompts</span>
+          <input type="checkbox" id="audioToggle" checked class="w-6 h-6" onchange="saveSettings()">
+        </label>
+      </div>
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h3 class="font-bold text-gray-800 mb-3">👤 My Preferences</h3>
+        <button onclick="goTo('screen-foods')" class="btn-big w-full bg-orange-100 text-orange-700 rounded-xl py-3 font-bold mb-2">Change Food Likes</button>
+        <button onclick="goTo('screen-allergies')" class="btn-big w-full bg-red-100 text-red-700 rounded-xl py-3 font-bold mb-2">Change Allergies</button>
+        <button onclick="goTo('screen-budget')" class="btn-big w-full bg-green-100 text-green-700 rounded-xl py-3 font-bold mb-2">Change Budget</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h3 class="font-bold text-gray-800 mb-3">🗑️ Data</h3>
+        <button onclick="if(confirm('Delete all data?')){localStorage.clear();location.reload()}" class="btn-big w-full bg-red-100 text-red-700 rounded-xl py-3 font-bold">Reset Everything</button>
+      </div>
+      <div class="bg-gray-100 rounded-2xl p-4 text-center text-sm text-gray-500">
+        <p>🍎 Nutrition Game Planner v1.0</p>
+        <p>Not medical advice. Talk to a doctor about dietary needs.</p>
+        <p class="mt-1" id="aiStats"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<div id="bottomNav" class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg hidden z-40">
+  <div class="max-w-md mx-auto flex justify-around py-2">
+    <button onclick="goTo('screen-dashboard')" class="nav-btn flex flex-col items-center py-1 px-3 rounded-xl" data-nav="dashboard">
+      <span class="text-2xl">🏠</span>
+      <span class="text-xs font-bold text-gray-500">Home</span>
+    </button>
+    <button onclick="goTo('screen-shopping')" class="nav-btn flex flex-col items-center py-1 px-3 rounded-xl" data-nav="shopping">
+      <span class="text-2xl">🛒</span>
+      <span class="text-xs font-bold text-gray-500">Shop</span>
+    </button>
+    <button onclick="goTo('screen-recipes')" class="nav-btn flex flex-col items-center py-1 px-3 rounded-xl" data-nav="recipes">
+      <span class="text-2xl">📖</span>
+      <span class="text-xs font-bold text-gray-500">Cook</span>
+    </button>
+    <button onclick="goTo('screen-challenges')" class="nav-btn flex flex-col items-center py-1 px-3 rounded-xl" data-nav="challenges">
+      <span class="text-2xl">🏆</span>
+      <span class="text-xs font-bold text-gray-500">Play</span>
+    </button>
+    <button onclick="goTo('screen-chat')" class="nav-btn flex flex-col items-center py-1 px-3 rounded-xl" data-nav="chat">
+      <span class="text-2xl">💬</span>
+      <span class="text-xs font-bold text-gray-500">Coach</span>
+    </button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ===== GLOBAL STATE =====
+  window.aiTotalInputTokens = 0;
+  window.aiTotalOutputTokens = 0;
+  window.aiTotalTime = 0;
+  window.aiTimeByAlias = {};
+
+  let state = {
+    role: '',
+    foods: [],
+    allergies: [],
+    budget: 'low',
+    culture: [],
+    mealPlan: null,
+    shoppingList: [],
+    recipes: [],
+    challenges: [],
+    badges: [],
+    points: 0,
+    mealsCompleted: 0,
+    chatHistory: [],
+    checkedItems: []
+  };
+
+  const FOODS = [
+    { id: 'chicken', emoji: '🍗', name: 'Chicken' },
+    { id: 'rice', emoji: '🍚', name: 'Rice' },
+    { id: 'beans', emoji: '🫘', name: 'Beans' },
+    { id: 'eggs', emoji: '🥚', name: 'Eggs' },
+    { id: 'bread', emoji: '🍞', name: 'Bread' },
+    { id: 'pasta', emoji: '🍝', name: 'Pasta' },
+    { id: 'fish', emoji: '🐟', name: 'Fish' },
+    { id: 'beef', emoji: '🥩', name: 'Beef' },
+    { id: 'carrots', emoji: '🥕', name: 'Carrots' },
+    { id: 'broccoli', emoji: '🥦', name: 'Broccoli' },
+    { id: 'tomatoes', emoji: '🍅', name: 'Tomatoes' },
+    { id: 'bananas', emoji: '🍌', name: 'Bananas' },
+    { id: 'apples', emoji: '🍎', name: 'Apples' },
+    { id: 'corn', emoji: '🌽', name: 'Corn' },
+    { id: 'potatoes', emoji: '🥔', name: 'Potatoes' },
+    { id: 'cheese', emoji: '🧀', name: 'Cheese' },
+    { id: 'milk', emoji: '🥛', name: 'Milk' },
+    { id: 'yogurt', emoji: '🫙', name: 'Yogurt' }
+  ];
+
+  const ALLERGIES = [
+    { id: 'dairy', emoji: '🥛', name: 'Dairy' },
+    { id: 'nuts', emoji: '🥜', name: 'Nuts' },
+    { id: 'gluten', emoji: '🌾', name: 'Gluten' },
+    { id: 'eggs', emoji: '🥚', name: 'Eggs' },
+    { id: 'fish', emoji: '🐟', name: 'Fish' },
+    { id: 'soy', emoji: '🫘', name: 'Soy' },
+    { id: 'shellfish', emoji: '🦐', name: 'Shellfish' },
+    { id: 'none', emoji: '✅', name: 'None!' }
+  ];
+
+  const CULTURES = [
+    { id: 'american', emoji: '🇺🇸', name: 'American' },
+    { id: 'mexican', emoji: '🇲🇽', name: 'Mexican' },
+    { id: 'chinese', emoji: '🇨🇳', name: 'Chinese' },
+    { id: 'african', emoji: '🌍', name: 'African' },
+    { id: 'indian', emoji: '🇮🇳', name: 'Indian' },
+    { id: 'caribbean', emoji: '🏝️', name: 'Caribbean' },
+    { id: 'southern', emoji: '🏡', name: 'Southern US' },
+    { id: 'mixed', emoji: '🌈', name: 'Mix / Other' }
+  ];
+
+  // ===== AI HELPER =====
+  async function callAI(prompt, retries = 3) {
+    const start = Date.now();
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch('https://16504442930.work/run_prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            alias: 'genericAI',
+            params: { prompt }
+          })
+        });
+        const data = await res.json();
+        const elapsed = Date.now() - start;
+        window.aiTotalTime += elapsed;
+        window.aiTimeByAlias['genericAI'] = (window.aiTimeByAlias['genericAI'] || 0) + elapsed;
+        if (data.input_tokens) window.aiTotalInputTokens += data.input_tokens;
+        if (data.output_tokens) window.aiTotalOutputTokens += data.output_tokens;
+        return data;
+      } catch (e) {
+        if (i === retries - 1) {
+          // Format error via AI
+          try {
+            const errRes = await fetch('https://16504442930.work/run_prompt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                alias: 'genericAI',
+                params: { prompt: `Reformat this error message to be user-friendly and empowering, helping the user understand what went wrong and how to fix it. Include the full original error. Error: ${JSON.stringify(e.message || e)}. Return JSON with key "friendlyError" as a string.` }
+              })
+            });
+            const errData = await errRes.json();
+            throw new Error(errData.friendlyError || e.message);
+          } catch (e2) {
+            throw new Error('Oops! Something went wrong connecting to our nutrition helper. Please check your internet and try again! 🔄');
+          }
+        }
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+
+  // ===== SPEECH =====
+  function speak(text) {
+    if (!document.getElementById('audioToggle')?.checked) return;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.9;
+      u.pitch = 1.1;
+      window.speechSynthesis.speak(u);
+    }
+  }
+  window.speak = speak;
+
+  // ===== NAVIGATION =====
+  function goTo(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+
+    const showNav = ['screen-dashboard','screen-shopping','screen-recipes','screen-challenges','screen-chat','screen-recipe-detail','screen-settings'].includes(screenId);
+    document.getElementById('bottomNav').classList.toggle('hidden', !showNav);
+
+    // Update nav active states
+    const navMap = {
+      'screen-dashboard': 'dashboard',
+      'screen-shopping': 'shopping',
+      'screen-recipes': 'recipes',
+      'screen-recipe-detail': 'recipes',
+      'screen-challenges': 'challenges',
+      'screen-chat': 'chat'
+    };
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    const navKey = navMap[screenId];
+    if (navKey) {
+      document.querySelector(`.nav-btn[data-nav="${navKey}"]`)?.classList.add('active');
+    }
+
+    // Audio greeting on certain screens
+    if (screenId === 'screen-foods') speak('Tap the foods your family likes!');
+    if (screenId === 'screen-allergies') speak('Do you have any food allergies? Tap them.');
+    if (screenId === 'screen-budget') speak('How much can you spend on food each week?');
+    if (screenId === 'screen-dashboard') speak('Welcome! Here is your nutrition plan.');
+  }
+  window.goTo = goTo;
+
+  // ===== SETUP GRIDS =====
+  function renderFoodGrid() {
+    const grid = document.getElementById('foodGrid');
+    grid.innerHTML = FOODS.map(f => `
+      <button onclick="toggleFood('${f.id}')" class="food-card btn-big bg-white rounded-2xl shadow-md p-3 flex flex-col items-center gap-1 ${state.foods.includes(f.id) ? 'selected' : ''}" data-food="${f.id}">
+        <span class="text-4xl">${f.emoji}</span>
+        <span class="text-sm font-bold text-gray-700">${f.name}</span>
+      </button>
+    `).join('');
+  }
+
+  function renderAllergyGrid() {
+    const grid = document.getElementById('allergyGrid');
+    grid.innerHTML = ALLERGIES.map(a => `
+      <button onclick="toggleAllergy('${a.id}')" class="food-card btn-big bg-white rounded-2xl shadow-md p-3 flex flex-col items-center gap-1 ${state.allergies.includes(a.id) ? 'selected' : ''}" data-allergy="${a.id}">
+        <span class="text-4xl">${a.emoji}</span>
+        <span class="text-sm font-bold text-gray-700">${a.name}</span>
+      </button>
+    `).join('');
+  }
+
+  function renderCultureGrid() {
+    const grid = document.getElementById('cultureGrid');
+    grid.innerHTML = CULTURES.map(c => `
+      <button onclick="toggleCulture('${c.id}')" class="food-card btn-big bg-white rounded-2xl shadow-md p-4 flex items-center gap-3 ${state.culture.includes(c.id) ? 'selected' : ''}" data-culture="${c.id}">
+        <span class="text-3xl">${c.emoji}</span>
+        <span class="font-bold text-gray-700">${c.name}</span>
+      </button>
+    `).join('');
+  }
+
+  // ===== TOGGLE FUNCTIONS =====
+  window.toggleFood = function(id) {
+    const idx = state.foods.indexOf(id);
+    if (idx > -1) state.foods.splice(idx, 1);
+    else state.foods.push(id);
+    renderFoodGrid();
+  };
+
+  window.toggleAllergy = function(id) {
+    if (id === 'none') { state.allergies = ['none']; renderAllergyGrid(); return; }
+    state.allergies = state.allergies.filter(a => a !== 'none');
+    const idx = state.allergies.indexOf(id);
+    if (idx > -1) state.allergies.splice(idx, 1);
+    else state.allergies.push(id);
+    renderAllergyGrid();
+  };
+
+  window.toggleCulture = function(id) {
+    const idx = state.culture.indexOf(id);
+    if (idx > -1) state.culture.splice(idx, 1);
+    else state.culture.push(id);
+    renderCultureGrid();
+  };
+
+  // ===== SET FUNCTIONS =====
+  window.setRole = function(role) {
+    state.role = role;
+    saveState();
+    goTo('screen-foods');
+  };
+
+  window.setBudget = function(budget) {
+    state.budget = budget;
+    document.querySelectorAll('[data-budget]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.budget === budget);
+    });
+  };
+
+  window.saveFoodPrefs = function() { saveState(); };
+  window.saveAllergies = function() { saveState(); };
+  window.saveCulture = function() { saveState(); };
+  window.saveSettings = function() { saveState(); };
+
+  // ===== GENERATE MEAL PLAN =====
+  window.generateMealPlan = async function() {
+    showLoader('Creating your meal plan...');
+    const foodNames = state.foods.map(id => FOODS.find(f => f.id === id)?.name).filter(Boolean);
+    const allergyNames = state.allergies.filter(a => a !== 'none').map(id => ALLERGIES.find(a => a.id === id)?.name).filter(Boolean);
+    const cultureNames = state.culture.map(id => CULTURES.find(c => c.id === id)?.name).filter(Boolean);
+
+    const budgetMap = { low: 'under $50/week (very tight)', medium: '$50-$100/week (moderate)', higher: 'over $100/week (flexible)' };
+
+    const prompt = `You are a nutrition expert for low-income families. Create a 7-day meal plan.
+
+FAMILY PREFERENCES:
+- Liked foods: ${foodNames.join(', ') || 'no preference'}
+- Allergies/Avoid: ${allergyNames.join(', ') || 'none'}
+- Budget: ${budgetMap[state.budget]}
+- Cultural food traditions: ${cultureNames.join(', ') || 'general American'}
+
+REQUIREMENTS:
+- Each day needs: lunch and dinner (simple, affordable)
+- Use common, cheap ingredients available at most grocery stores
+- Meals should be easy to cook (under 30 minutes, few steps)
+- Include vegetables/fruits in most meals
+- Kid-friendly, culturally appropriate
+- Give estimated cost per meal
+
+Return ONLY valid JSON with this exact structure:
+{
+  "days": [
+    {
+      "day": "Monday",
+      "lunch": {
+        "name": "string (short, friendly name)",
+        "emoji": "string (1-2 food emojis)",
+        "description": "string (1 sentence, simple words)",
+        "cost": "string (e.g. '$3-4')",
+        "ingredients": ["string array of ingredient names"],
+        "steps": ["string array of simple cooking steps, max 6 steps, use simple words"],
+        "nutrition": "string (brief: e.g. 'protein + veggies + grain')"
+      },
+      "dinner": {
+        "name": "string",
+        "emoji": "string",
+        "description": "string",
+        "cost": "string",
+        "ingredients": ["string"],
+        "steps": ["string"],
+        "nutrition": "string"
+      }
+    }
+  ],
+  "shoppingList": [
+    {
+      "item": "string (ingredient name)",
+      "emoji": "string (1 emoji for this item)",
+      "quantity": "string (e.g. '2 lbs', '1 can')",
+      "estimatedPrice": "string (e.g. '$2.50')",
+      "category": "string (one of: 'Produce', 'Meat', 'Dairy', 'Grains', 'Canned', 'Other')"
+    }
+  ],
+  "weeklyTotal": "string (estimated weekly cost)",
+  "challenges": [
+    {
+      "id": "string",
+      "title": "string (fun challenge name)",
+      "emoji": "string",
+      "description": "string (simple 1 sentence)",
+      "points": 10,
+      "type": "string (one of: 'cooking', 'eating', 'shopping', 'learning')"
+    }
+  ]
+}`;
+
+    try {
+      const result = await callAI(prompt);
+      let plan;
+
+      // Try to parse the response - it might be nested in a key
+      if (typeof result === 'object') {
+        if (result.days) {
+          plan = result;
+        } else {
+          // Look for the data in common response keys
+          const keys = Object.keys(result);
+          for (const key of keys) {
+            if (typeof result[key] === 'object' && result[key]?.days) {
+              plan = result[key];
+              break;
+            }
+            if (typeof result[key] === 'string') {
+              try {
+                const parsed = JSON.parse(result[key]);
+                if (parsed.days) { plan = parsed; break; }
+              } catch(e) {}
+            }
+          }
+          if (!plan) plan = result;
+        }
+      }
+
+      state.mealPlan = plan;
+      state.shoppingList = plan.shoppingList || [];
+      state.challenges = plan.challenges || [];
+      state.recipes = [];
+
+      // Extract recipes from meal plan
+      if (plan.days) {
+        plan.days.forEach(day => {
+          if (day.lunch) state.recipes.push({ ...day.lunch, day: day.day, meal: 'Lunch' });
+          if (day.dinner) state.recipes.push({ ...day.dinner, day: day.day, meal: 'Dinner' });
+        });
+      }
+
+      // Add starter badges
+      if (!state.badges.length) {
+        state.badges.push({ emoji: '🌟', name: 'Getting Started' });
+        addPoints(10);
+      }
+
+      saveState();
+      hideLoader();
+      renderDashboard();
+      goTo('screen-dashboard');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      speak('Your meal plan is ready! Tap any meal to see the recipe.');
+    } catch (e) {
+      hideLoader();
+      alert(e.message || 'Could not create meal plan. Please try again!');
+    }
+  };
+
+  // ===== RENDER FUNCTIONS =====
+  function renderDashboard() {
+    // Greeting
+    const greetings = { family: '👨‍👩‍👧‍👦 Family Chef!', teacher: '👩‍🏫 Super Teacher!', healthworker: '🏥 Health Hero!' };
+    document.getElementById('dashGreeting').textContent = `Hi, ${greetings[state.role] || 'Friend!'} `;
+
+    // Points
+    document.getElementById('pointsBadge').textContent = `⭐ ${state.points}`;
+
+    // Progress
+    const pct = Math.min(100, (state.mealsCompleted / 7) * 100);
+    document.getElementById('weeklyProgress').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = `Weekly challenge: ${state.mealsCompleted}/7 healthy meals ✨`;
+
+    // Today's meals
+    const todayMeals = document.getElementById('todayMeals');
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const today = dayNames[new Date().getDay()];
+
+    if (state.mealPlan?.days) {
+      const todayPlan = state.mealPlan.days.find(d => d.day === today) || state.mealPlan.days[0];
+      todayMeals.innerHTML = '';
+
+      if (todayPlan.lunch) {
+        todayMeals.innerHTML += mealCard(todayPlan.lunch, 'Lunch', todayPlan.day);
+      }
+      if (todayPlan.dinner) {
+        todayMeals.innerHTML += mealCard(todayPlan.dinner, 'Dinner', todayPlan.day);
+      }
+    } else {
+      todayMeals.innerHTML = '<p class="text-gray-400 text-center py-4">No meals yet. Generate a plan! 🍳</p>';
+    }
+
+    // Badges
+    const badges = document.getElementById('badgesContainer');
+    if (state.badges.length) {
+      badges.innerHTML = state.badges.map(b => `
+        <span class="badge inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 rounded-full px-3 py-1 text-sm font-bold">
+          ${b.emoji} ${b.name}
+        </span>
+      `).join('');
+    } else {
+      badges.innerHTML = '<p class="text-gray-400">Complete challenges to earn badges! 🏅</p>';
+    }
+
+    // AI stats
+    document.getElementById('aiStats').textContent = `AI: ${window.aiTotalInputTokens + window.aiTotalOutputTokens} tokens, ${(window.aiTotalTime/1000).toFixed(1)}s`;
+  }
+
+  function mealCard(meal, type, day) {
+    const idx = state.recipes.findIndex(r => r.name === meal.name && r.day === day && r.meal === type);
+    return `
+      <div class="bg-gray-50 rounded-xl p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-100" onclick="showRecipe(${idx})">
+        <span class="text-3xl">${meal.emoji || '🍽️'}</span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-orange-500 uppercase">${type}</span>
+            <span class="text-xs text-gray-400">${meal.cost || ''}</span>
+          </div>
+          <p class="font-bold text-gray-800 truncate">${meal.name}</p>
+          <p class="text-xs text-gray-500 truncate">${meal.description || ''}</p>
+        </div>
+        <button onclick="event.stopPropagation(); completeMeal('${meal.name}')" class="btn-big bg-green-100 text-green-600 rounded-full w-10 h-10 flex items-center justify-center text-xl">✓</button>
+      </div>
+    `;
+  }
+
+  window.completeMeal = function(name) {
+    state.mealsCompleted = Math.min(7, state.mealsCompleted + 1);
+    addPoints(5);
+    if (state.mealsCompleted === 7 && !state.badges.find(b => b.name === 'Week Champion')) {
+      state.badges.push({ emoji: '🏆', name: 'Week Champion' });
+      confetti({ particleCount: 200, spread: 100 });
+      speak('Amazing! You completed all 7 healthy meals this week!');
+    }
+    saveState();
+    renderDashboard();
+    speak('Great job! Meal completed!');
+  };
+
+  window.showRecipe = function(idx) {
+    if (idx < 0 || idx >= state.recipes.length) return;
+    const recipe = state.recipes[idx];
+    window.currentRecipe = recipe;
+    document.getElementById('recipeTitle').textContent = `${recipe.emoji || '🍽️'} ${recipe.name}`;
+
+    const detail = document.getElementById('recipeDetail');
+    detail.innerHTML = `
+      <div class="text-center mb-4">
+        <span class="text-6xl">${recipe.emoji || '🍽️'}</span>
+        <h2 class="text-2xl font-bold text-gray-800 mt-2">${recipe.name}</h2>
+        <p class="text-gray-500">${recipe.day || ''} ${recipe.meal || ''} • ${recipe.cost || ''}</p>
+        <p class="text-sm text-green-600 font-bold mt-1">${recipe.nutrition || ''}</p>
+      </div>
+      <div class="bg-orange-50 rounded-2xl p-4 mb-4">
+        <h3 class="font-bold text-orange-700 mb-2">🛒 What you need:</h3>
+        <div class="grid grid-cols-2 gap-2">
+          ${(recipe.ingredients || []).map(ing => `
+            <div class="flex items-center gap-2 bg-white rounded-xl p-2">
+              <span class="text-xl">📌</span>
+              <span class="text-sm font-semibold text-gray-700">${ing}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="bg-blue-50 rounded-2xl p-4">
+        <h3 class="font-bold text-blue-700 mb-3">👨‍🍳 How to make it:</h3>
+        <div class="space-y-3">
+          ${(recipe.steps || []).map((step, i) => `
+            <div class="flex gap-3 items-start">
+              <span class="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold flex-shrink-0">${i+1}</span>
+              <p class="text-gray-700 text-lg pt-1">${step}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <button onclick="completeMeal('${recipe.name}'); goTo('screen-dashboard')" class="btn-big w-full bg-green-500 text-white text-xl font-bold rounded-2xl py-4 mt-4">
+        ✅ I Made This! (+5 ⭐)
+      </button>
+    `;
+    goTo('screen-recipe-detail');
+  };
+
+  window.speakRecipe = function() {
+    if (!window.currentRecipe) return;
+    const r = window.currentRecipe;
+    let text = `${r.name}. You need: ${(r.ingredients||[]).join(', ')}. Steps: `;
+    (r.steps||[]).forEach((s,i) => text += `Step ${i+1}: ${s}. `);
+    speak(text);
+  };
+
+  window.speakMeals = function() {
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const today = dayNames[new Date().getDay()];
+    if (!state.mealPlan?.days) { speak('No meal plan yet!'); return; }
+    const todayPlan = state.mealPlan.days.find(d => d.day === today) || state.mealPlan.days[0];
+    let text = `Today's meals: `;
+    if (todayPlan.lunch) text += `For lunch: ${todayPlan.lunch.name}. `;
+    if (todayPlan.dinner) text += `For dinner: ${todayPlan.dinner.name}. `;
+    speak(text);
+  };
+
+  // ===== SHOPPING LIST =====
+  function renderShopping() {
+    const list = document.getElementById('shoppingList');
+    if (!state.shoppingList.length) {
+      list.innerHTML = '<p class="text-center text-gray-400 py-8">Generate a meal plan first! 🛒</p>';
+      return;
+    }
+
+    // Group by category
+    const cats = {};
+    state.shoppingList.forEach(item => {
+      const cat = item.category || 'Other';
+      if (!cats[cat]) cats[cat] = [];
+      cats[cat].push(item);
+    });
+
+    let total = 0;
+    let html = '';
+    const catEmojis = { Produce: '🥬', Meat: '🥩', Dairy: '🧀', Grains: '🌾', Canned: '🥫', Other: '📦' };
+
+    Object.entries(cats).forEach(([cat, items]) => {
+      html += `<h3 class="font-bold text-gray-600 mt-4 mb-2 text-lg">${catEmojis[cat]||'📦'} ${cat}</h3>`;
+      items.forEach((item, i) => {
+        const checked = state.checkedItems.includes(item.item);
+        const price = parseFloat((item.estimatedPrice||'').replace(/[^0-9.]/g,'')) || 0;
+        total += price;
+        html += `
+          <div class="shopping-item bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 ${checked?'checked':''}" onclick="toggleShopItem('${item.item.replace(/'/g,"\\'")}')" >
+            <span class="text-3xl">${checked ? '☑️' : '⬜'}</span>
+            <span class="text-2xl">${item.emoji || '🛒'}</span>
+            <div class="flex-1">
+              <p class="font-bold text-gray-800">${item.item}</p>
+              <p class="text-sm text-gray-500">${item.quantity || ''}</p>
+            </div>
+            <span class="font-bold text-green-600">${item.estimatedPrice || ''}</span>
+          </div>
+        `;
+      });
+    });
+
+    list.innerHTML = html;
+    document.getElementById('shoppingTotal').textContent = `Estimated total: ~$${total.toFixed(0)} ${state.mealPlan?.weeklyTotal ? '('+state.mealPlan.weeklyTotal+')' : ''}`;
+  }
+
+  window.toggleShopItem = function(itemName) {
+    const idx = state.checkedItems.indexOf(itemName);
+    if (idx > -1) state.checkedItems.splice(idx, 1);
+    else state.checkedItems.push(itemName);
+    saveState();
+    renderShopping();
+  };
+
+  window.speakShopping = function() {
+    if (!state.shoppingList.length) { speak('No shopping list yet!'); return; }
+    const unchecked = state.shoppingList.filter(i => !state.checkedItems.includes(i.item));
+    let text = `You still need to buy: ${unchecked.map(i => `${i.quantity || ''} ${i.item}`).join(', ')}`;
+    speak(text);
+  };
+
+  // ===== RECIPES LIST =====
+  function renderRecipes() {
+    const list = document.getElementById('recipeList');
+    if (!state.recipes.length) {
+      list.innerHTML = '<p class="text-center text-gray-400 py-8">Generate a meal plan to see recipes! 📖</p>';
+      return;
+    }
+
+    // Group by day
+    const days = {};
+    state.recipes.forEach((r, i) => {
+      if (!days[r.day]) days[r.day] = [];
+      days[r.day].push({ ...r, idx: i });
+    });
+
+    let html = '';
+    Object.entries(days).forEach(([day, meals]) => {
+      html += `<h3 class="font-bold text-gray-600 text-lg mt-2">📅 ${day}</h3>`;
+      meals.forEach(m => {
+        html += `
+          <div class="bg-white rounded-2xl shadow-md p-4 flex items-center gap-3 cursor-pointer hover:shadow-lg" onclick="showRecipe(${m.idx})">
+            <span class="text-4xl">${m.emoji || '🍽️'}</span>
+            <div class="flex-1 min-w-0">
+              <span class="text-xs font-bold ${m.meal === 'Lunch' ? 'text-blue-500' : 'text-orange-500'}">${m.meal}</span>
+              <p class="font-bold text-gray-800">${m.name}</p>
+              <p class="text-sm text-gray-500 truncate">${m.description || ''}</p>
+            </div>
+            <span class="text-green-600 font-bold text-sm">${m.cost || ''}</span>
+          </div>
+        `;
+      });
+    });
+
+    list.innerHTML = html;
+  }
+
+  // ===== CHALLENGES =====
+  function renderChallenges() {
+    const list = document.getElementById('challengeList');
+    const defaultChallenges = [
+      { id: 'c1', title: 'Rainbow Plate', emoji: '🌈', description: 'Eat 3 different colored veggies today!', points: 15, type: 'eating' },
+      { id: 'c2', title: 'Helper Chef', emoji: '👨‍🍳', description: 'Let your kid help cook one meal!', points: 20, type: 'cooking' },
+      { id: 'c3', title: 'Fruit Finder', emoji: '🍎', description: 'Try a new fruit this week!', points: 10, type: 'shopping' },
+      { id: 'c4', title: 'Water Champ', emoji: '💧', description: 'Drink 6 glasses of water today!', points: 10, type: 'eating' },
+      { id: 'c5', title: 'No Soda Day', emoji: '🚫', description: 'Skip sugary drinks for a whole day!', points: 15, type: 'eating' }
+    ];
+
+    const challenges = state.challenges.length ? state.challenges : defaultChallenges;
+    const completed = JSON.parse(localStorage.getItem('completedChallenges') || '[]');
+
+    list.innerHTML = challenges.map(c => {
+      const done = completed.includes(c.id);
+      return `
+        <div class="bg-white rounded-2xl shadow-md p-4 ${done ? 'opacity-60' : ''}">
+          <div class="flex items-center gap-3">
+            <span class="text-4xl">${c.emoji}</span>
+            <div class="flex-1">
+              <p class="font-bold text-gray-800">${c.title}</p>
+              <p class="text-sm text-gray-500">${c.description}</p>
+              <span class="text-xs font-bold text-yellow-600">⭐ ${c.points} points</span>
+            </div>
+            <button onclick="completeChallenge('${c.id}', ${c.points}, '${c.title}')" class="btn-big ${done ? 'bg-green-200 text-green-700' : 'bg-yellow-400 text-white'} rounded-xl px-4 py-2 font-bold" ${done ? 'disabled' : ''}>
+              ${done ? '✅ Done!' : '🎯 Do It!'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.completeChallenge = function(id, points, title) {
+    const completed = JSON.parse(localStorage.getItem('completedChallenges') || '[]');
+    if (completed.includes(id)) return;
+    completed.push(id);
+    localStorage.setItem('completedChallenges', JSON.stringify(completed));
+    addPoints(points);
+
+    if (completed.length === 3 && !state.badges.find(b => b.name === 'Challenge Star')) {
+      state.badges.push({ emoji: '⭐', name: 'Challenge Star' });
+    }
+    if (completed.length >= 5 && !state.badges.find(b => b.name === 'Super Achiever')) {
+      state.badges.push({ emoji: '🦸', name: 'Super Achiever' });
+    }
+
+    saveState();
+    renderChallenges();
+    renderDashboard();
+    confetti({ particleCount: 50, spread: 60 });
+    speak(`Great job completing ${title}! You earned ${points} points!`);
+  };
+
+  // ===== CHAT =====
+  function renderChat() {
+    const msgs = document.getElementById('chatMessages');
+    if (!state.chatHistory.length) {
+      state.chatHistory.push({
+        role: 'bot',
+        text: "Hi! I'm your Nutrition Coach! 🤖🍎 Ask me about:\n\n🥗 Healthy substitutions\n💰 Saving money on food\n👶 Kid-friendly recipes\n📋 Meal prep tips\n\nTap a question below or type your own!"
+      });
+    }
+
+    msgs.innerHTML = state.chatHistory.map(m => `
+      <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}">
+        <div class="chat-bubble ${m.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white shadow-md text-gray-800'} rounded-2xl p-3 text-lg" style="white-space: pre-line;">
+          ${m.role === 'bot' ? '🤖 ' : ''}${m.text}
+        </div>
+      </div>
+    `).join('');
+
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Quick questions
+    const quickQ = document.getElementById('quickQuestions');
+    const questions = [
+      { emoji: '🥗', text: 'Healthy snack?' },
+      { emoji: '💰', text: 'Save money?' },
+      { emoji: '🔄', text: 'Substitute?' },
+      { emoji: '👶', text: 'Picky eater?' }
+    ];
+    quickQ.innerHTML = questions.map(q => `
+      <button onclick="document.getElementById('chatInput').value='${q.text}';sendChat()" class="btn-big flex-shrink-0 bg-blue-100 text-blue-700 rounded-full px-3 py-2 text-sm font-bold whitespace-nowrap">
+        ${q.emoji} ${q.text}
+      </button>
+    `).join('');
+  }
+
+  window.sendChat = async function() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    state.chatHistory.push({ role: 'user', text });
+    input.value = '';
+    renderChat();
+
+    // Show typing indicator
+    state.chatHistory.push({ role: 'bot', text: '...' });
+    renderChat();
+
+    const contextInfo = `User is a ${state.role || 'family member'} with ${state.budget} budget. They like: ${state.foods.join(', ')||'various foods'}. Allergies: ${state.allergies.join(', ')||'none'}. Culture: ${state.culture.join(', ')||'general'}.`;
+
+    const prompt = `You are a friendly, supportive nutrition coach for low-income families. Keep responses SHORT (2-4 sentences max), use simple words, and include helpful emojis. Be encouraging and practical.
+
+Context: ${contextInfo}
+
+Previous messages: ${state.chatHistory.slice(-6).map(m => `${m.role}: ${m.text}`).join('\n')}
+
+User asks: "${text}"
+
+Return JSON with key "response" as a string (the coach's reply, using simple language, emojis, and practical advice).`;
+
+    try {
+      const result = await callAI(prompt);
+      // Remove typing indicator
+      state.chatHistory.pop();
+
+      let response = result.response || result.message || result.text || '';
+      if (typeof result === 'object' && !response) {
+        const vals = Object.values(result);
+        response = vals.find(v => typeof v === 'string' && v.length > 10) || 'I\'m here to help! Try asking about healthy snacks, saving money on food, or recipe ideas! 🍎';
+      }
+
+      state.chatHistory.push({ role: 'bot', text: response });
+
+      // Award points for using coach
+      if (!state.badges.find(b => b.name === 'Curious Learner') && state.chatHistory.filter(m => m.role === 'user').length >= 3) {
+        state.badges.push({ emoji: '🧠', name: 'Curious Learner' });
+        addPoints(10);
+      }
+    } catch (e) {
+      state.chatHistory.pop();
+      state.chatHistory.push({ role: 'bot', text: 'Oops, I had trouble thinking! 🤔 Please try again. Make sure you have internet! 🔄' });
+    }
+
+    saveState();
+    renderChat();
+  };
+
+  // ===== HELPERS =====
+  function addPoints(n) {
+    state.points += n;
+    saveState();
+  }
+
+  function showLoader(text) {
+    document.getElementById('loaderText').textContent = text || 'Working on it...';
+    document.getElementById('globalLoader').classList.remove('hidden');
+  }
+
+  function hideLoader() {
+    document.getElementById('globalLoader').classList.add('hidden');
+  }
+
+  function saveState() {
+    localStorage.setItem('nutritionGameState', JSON.stringify(state));
+  }
+
+  function loadState() {
+    const saved = localStorage.getItem('nutritionGameState');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        state = { ...state, ...parsed };
+        return true;
+      } catch(e) {}
+    }
+    return false;
+  }
+
+  window.loadSavedData = function() {
+    renderDashboard();
+    renderShopping();
+    renderRecipes();
+    renderChallenges();
+    renderChat();
+    goTo('screen-dashboard');
+  };
+
+  // ===== SCREEN CHANGE HOOKS =====
+  const originalGoTo = goTo;
+  window.goTo = function(screenId) {
+    originalGoTo(screenId);
+    if (screenId === 'screen-shopping') renderShopping();
+    if (screenId === 'screen-recipes') renderRecipes();
+    if (screenId === 'screen-challenges') renderChallenges();
+    if (screenId === 'screen-chat') renderChat();
+    if (screenId === 'screen-dashboard') renderDashboard();
+    if (screenId === 'screen-foods') renderFoodGrid();
+    if (screenId === 'screen-allergies') renderAllergyGrid();
+    if (screenId === 'screen-culture') renderCultureGrid();
+  };
+
+  // ===== INIT =====
+  function init() {
+    const hasSaved = loadState();
+    renderFoodGrid();
+    renderAllergyGrid();
+    renderCultureGrid();
+
+    if (hasSaved && state.mealPlan) {
+      document.getElementById('continueBtn').classList.remove('hidden');
+    }
+
+    // Preload speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
